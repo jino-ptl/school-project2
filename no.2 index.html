@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>급식 알림 프로그램</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+
+    body {
+      font-family: 'Share Tech Mono', monospace;
+      margin: 0;
+      padding: 0;
+      background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+      color: #00ffcc;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    h1 {
+      margin-top: 40px;
+      text-align: center;
+      color: #00ffff;
+      text-shadow: 0 0 10px #00ffff;
+      font-size: 2em;
+    }
+
+    button {
+      width: 250px;
+      padding: 12px;
+      margin: 10px;
+      font-size: 16px;
+      background-color: #003333;
+      color: #00ffcc;
+      border: 2px solid #00ffcc;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-shadow: 0 0 5px #00ffcc;
+    }
+
+    button:hover {
+      background-color: #00ffcc;
+      color: #003333;
+      text-shadow: none;
+    }
+
+    #result {
+      white-space: pre-wrap;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 0 10px #00ffcc;
+      margin: 30px;
+      width: 90%;
+      max-width: 700px;
+      color: #00ffcc;
+      overflow-y: auto;
+    }
+  </style>
+</head>
+<body>
+  <h1>🍱 급식 정보 조회</h1>
+  <button onclick="fetchMeal('today')">오늘의 급식 보기</button>
+  <button onclick="fetchMeal('week')">주간 급식 보기</button>
+  <div id="result">김해대청고등학교.</div>
+
+  <script>
+    const SCHOOL_CODE = "9010282";
+    const OFFICE_CODE = "S10";
+    const API_KEY = "94f7784bb8694dddaede7dcd4f685706";
+
+    const allergyMap = {
+      "1": "난류(계란)", "2": "우유", "3": "메밀", "4": "땅콩",
+      "5": "대두", "6": "밀", "7": "고등어", "8": "게",
+      "9": "새우", "10": "돼지고기", "11": "복숭아",
+      "12": "토마토", "13": "아황산류", "14": "호두",
+      "15": "닭고기", "16": "쇠고기", "17": "오징어", "18": "조개류"
+    };
+
+    function parseAllergy(text) {
+      const m = text.match(/\((\d+(?:\.\d+)*)\)/);
+      if (!m) return [];
+      return m[1].split('.').map(n => allergyMap[n]).filter(Boolean);
+    }
+
+    function formatDate(date) {
+      const kst = new Date(date.getTime() + 9 * 60 * 60 * 1000);
+      return kst.toISOString().slice(0, 10).replace(/-/g, "");
+    }
+
+    async function getMealInfo(date) {
+      const url = `https://open.neis.go.kr/hub/mealServiceDietInfo?KEY=${API_KEY}` +
+        `&Type=json&ATPT_OFCDC_SC_CODE=${OFFICE_CODE}` +
+        `&SD_SCHUL_CODE=${SCHOOL_CODE}&MLSV_YMD=${date}`;
+      try {
+        const res = await fetch(url);
+        if (!res.ok) return "API 요청 실패";
+        const data = await res.json();
+        const rows = data.mealServiceDietInfo?.[1]?.row;
+        if (!rows) return "급식 정보 없음";
+        return rows.map(m => {
+          const dishes = m.DDISH_NM.replace(/<br\s*\/?>(\n)?/g, '\n').split('\n');
+          const lines = dishes.map(d => {
+            const allergies = parseAllergy(d);
+            return allergies.length ? `${d} !! [알레르기: ${allergies.join(', ')}]` : d;
+          });
+          return `[${m.MMEAL_SC_NM}]
+` + lines.join('\n');
+        }).join('\n\n');
+      } catch {
+        return "급식 정보 없음";
+      }
+    }
+
+    async function fetchMeal(mode) {
+      const resultDiv = document.getElementById("result");
+      const today = new Date();
+
+      if (mode === "today") {
+        const ds = formatDate(today);
+        const info = await getMealInfo(ds);
+        resultDiv.innerText = `📅 오늘의 급식\n\n${info}`;
+      } else {
+        let all = [];
+        for (let i = 0; i < 5; i++) {
+          const d = new Date();
+          d.setDate(today.getDate() + i);
+          const ds = formatDate(d);
+          const pretty = `${d.getMonth() + 1}월 ${d.getDate()}일 (${"일월화수목금토"[d.getDay()]})`;
+          const info = await getMealInfo(ds);
+          all.push(`■ ${pretty}\n${info}`);
+        }
+        resultDiv.innerText = `📅 주간 급식\n\n${all.join("\n\n")}`;
+      }
+    }
+  </script>
+</body>
+</html>
